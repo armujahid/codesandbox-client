@@ -1,14 +1,14 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import styled from 'styled-components';
 
-import { inject, observer } from 'app/componentConnectors';
+import { observer } from 'app/componentConnectors';
 import PowerIcon from 'react-icons/lib/md/power-settings-new';
 
 import BrowserIcon from 'react-icons/lib/go/browser';
 
 import Margin from '@codesandbox/common/lib/components/spacing/Margin';
 import { Button } from '@codesandbox/common/lib/components/Button';
-
+import { useStore, useSignals } from 'app/store';
 import {
   Description,
   WorkspaceInputContainer,
@@ -29,16 +29,37 @@ const SubTitle = styled.div`
   font-size: 0.875rem;
 `;
 
-function Server({ store, signals }: { store: any; signals: any }) {
-  const disconnected = store.server.status !== 'connected';
+type Port = {
+  main: boolean;
+  port: number;
+  hostname: string;
+  name?: string;
+};
 
-  const openPort = (port: {
-    main: boolean;
-    port: number;
-    hostname: string;
-  }) => {
+function Server() {
+  const { server, editor } = useStore();
+  const signals = useSignals();
+  const [ports, setPorts] = useState(server.ports);
+  const disconnected = server.status !== 'connected';
+  const sandbox = editor.currentSandbox;
+
+  const openPort = (port: Port) => {
     signals.server.onBrowserFromPortOpened({ port });
   };
+
+  useEffect(() => {
+    if (sandbox.template === 'gatsby') {
+      const mainPort = server.ports.find((port: Port) => port.main);
+      setPorts((p: Port[]) =>
+        p.concat({
+          ...mainPort,
+          main: false,
+          hostname: mainPort.hostname + '/___graphql',
+          name: 'GraphiQL',
+        })
+      );
+    }
+  }, [sandbox.template, server.ports]);
 
   return (
     <div>
@@ -51,8 +72,8 @@ function Server({ store, signals }: { store: any; signals: any }) {
         <SubTitle>Status</SubTitle>
         <WorkspaceInputContainer>
           <Status
-            managerStatus={store.server.status}
-            containerStatus={store.server.containerStatus}
+            managerStatus={server.status}
+            containerStatus={server.containerStatus}
           />
         </WorkspaceInputContainer>
       </Margin>
@@ -70,8 +91,8 @@ function Server({ store, signals }: { store: any; signals: any }) {
           >
             <Tasks
               package={
-                store.editor.parsedConfigurations.package &&
-                store.editor.parsedConfigurations.package.parsed
+                editor.parsedConfigurations.package &&
+                editor.parsedConfigurations.package.parsed
               }
             />
           </WorkspaceInputContainer>
@@ -81,8 +102,8 @@ function Server({ store, signals }: { store: any; signals: any }) {
       <Margin top={1} bottom={0.5}>
         <SubTitle>Open Ports</SubTitle>
         <Margin top={0.5}>
-          {store.server.ports.length ? (
-            store.server.ports.map(port => (
+          {ports.length ? (
+            ports.map(port => (
               <EntryContainer
                 style={{ position: 'relative' }}
                 onClick={() => openPort(port)}
@@ -96,7 +117,9 @@ function Server({ store, signals }: { store: any; signals: any }) {
                   }}
                 >
                   <BrowserIcon />
-                  <div style={{ marginLeft: '0.75rem' }}>{port.port}</div>
+                  <div style={{ marginLeft: '0.75rem' }}>
+                    {port.name || port.port}
+                  </div>
                 </div>
                 {port.main && (
                   <div
@@ -132,7 +155,7 @@ function Server({ store, signals }: { store: any; signals: any }) {
             small
             block
             disabled={
-              disconnected || store.server.containerStatus !== 'sandbox-started'
+              disconnected || server.containerStatus !== 'sandbox-started'
             }
             onClick={() => {
               signals.server.restartSandbox({});
@@ -155,9 +178,7 @@ function Server({ store, signals }: { store: any; signals: any }) {
             }}
             small
             block
-            disabled={
-              disconnected || store.server.containerStatus === 'initializing'
-            }
+            disabled={disconnected || server.containerStatus === 'initializing'}
             onClick={() => {
               signals.server.restartContainer({});
             }}
@@ -186,4 +207,4 @@ function Server({ store, signals }: { store: any; signals: any }) {
   );
 }
 
-export default inject('store', 'signals')(observer(Server));
+export default observer(Server);
